@@ -1,0 +1,34 @@
+POE/Component/OSCAR version 0.01
+================================
+
+This module is a wrapper around the Net::OSCAR module that allows it to be
+used from POE applications.
+
+See oscar_telnet.pl, included in this package, for an simple example of
+using this module.
+
+INSTALLATION
+
+To install this module type the following:
+
+   perl Makefile.PL
+   make
+   make test
+   make install
+
+DEPENDENCIES
+
+This module requires these other modules and libraries:
+
+  Net::OSCAR
+  POE
+
+COPYRIGHT AND LICENCE
+
+Put the correct copyright and licence information here.
+
+Copyright (C) 2003 Dan McCormick
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself. 
+

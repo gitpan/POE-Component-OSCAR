@@ -1,0 +1,7 @@
+Changes
+Makefile.PL
+MANIFEST
+OSCAR.pm
+README
+t/1.t
+examples/oscar_telnet.pl

@@ -6,7 +6,7 @@ use vars qw($VERSION);
 use POE::Preprocessor;
 use POE 0.28;
 
-$VERSION = .01;
+$VERSION = .02;
 
 # make life prettier
 const KERNEL    $_[KERNEL]
@@ -97,7 +97,7 @@ sub _stop {
 
 sub _default {
 	my ($method, $args) = ARGS;
-#	print "Calling $method with args " . join(',', @$args ) . "\n";
+#	print "PocoOSCAR: Calling $method with args " . join(',', @$args ) . "\n";
 	eval {
 		HEAP->{oscar}->$method( @$args );
 	};
@@ -131,6 +131,10 @@ sub connection_changed {
 		delete $filenos{ fileno($socket) };
 		$poe_kernel->select( $socket );
 	} elsif (!$filenos{ fileno($socket) }) {
+		# Need the line below for faster machines; otherwise some bits seem to get lost
+		# along the way.  It's a hack, but it should only get called twice in all (once
+		# upon connection, once upon signon) so for now it should suffice.
+		sleep 1;
 		$filenos{ fileno($socket) }++;
 		$poe_kernel->select( $socket, 'rd_ok', 'wr_ok', 'ex_ok' );
 	}

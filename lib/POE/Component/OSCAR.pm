@@ -6,7 +6,7 @@ use vars qw($VERSION);
 use POE::Preprocessor;
 use POE 0.28;
 
-$VERSION = .02;
+$VERSION = .03;
 
 # make life prettier
 const KERNEL    $_[KERNEL]
@@ -24,7 +24,7 @@ sub new {
 	my $self = {
 		session => POE::Session->create(
 			package_states => [
-				OSCARSession => [qw(_start _stop _default rd_ok wr_ok ex_ok set_callback connection_changed quit)]
+				OSCARSession => [qw(_start _stop _default queue_im rd_ok wr_ok ex_ok set_callback connection_changed quit)]
 			],
 			args => [ @args ],
 		)
@@ -51,6 +51,7 @@ package OSCARSession;
 
 use POE;
 use Net::OSCAR 0.62;
+use Time::HiRes qw(sleep time);
 
 # store filenos so if we get a new one, we can have POE watch it
 my %filenos = ();
@@ -59,8 +60,10 @@ sub _start {
 	my %args = ARGS;
 
 	KERNEL->sig( INT => 'quit' );
+	HEAP->{throttle_time} = delete $args{throttle};
+	HEAP->{im_queue} = [];
 
-	my $oscar = HEAP->{oscar} = Net::OSCAR->new();
+	my $oscar = HEAP->{oscar} = Net::OSCAR->new( %args );
 #	$oscar->loglevel( 10, 1 );
 
 	$oscar->set_callback_connection_changed( SESSION->callback( 'connection_changed' ) );
@@ -71,6 +74,7 @@ sub rd_ok {
 	my $fileno = fileno($socket);
 	return unless $fileno;
 	my $conn = HEAP->{oscar}->findconn($fileno);
+	sleep 0.1;
 	$conn->process_one(1, 0);
 }
 
@@ -79,6 +83,7 @@ sub wr_ok {
 	my $fileno = fileno($socket);
 	return unless $fileno;
 	my $conn = HEAP->{oscar}->findconn($fileno);
+	sleep 0.1;
 	$conn->process_one(0, 1);
 }
 
@@ -90,14 +95,48 @@ sub ex_ok {
 	KERNEL->select($socket); # stop POE from watching the socket
 	$conn->{sockerr} = 1;
 	$conn->disconnect();
+	sleep 0.1;
 }
 
 sub _stop {
 }
 
+sub queue_im {
+	my @send_im_args = ARGS;
+
+	my $queue = HEAP->{im_queue};
+	if (@send_im_args) {
+		push @$queue, \@send_im_args;
+	}
+
+	if (@$queue and HEAP->{last_im_sent_time} + HEAP->{throttle_time} < time) {
+		my $args = shift @$queue;
+		eval {
+			HEAP->{oscar}->send_im( @$args );
+		};
+		warn $@ if $@;
+
+		HEAP->{last_im_sent_time} = time;
+
+	} else {
+		KERNEL->delay( "queue_im",
+			HEAP->{last_im_sent_time} + HEAP->{throttle_time} - time );
+		return;
+	}
+
+	if (@$queue) {
+		KERNEL->delay( "queue_im", HEAP->{throttle_time} );
+	}
+}
+
 sub _default {
 	my ($method, $args) = ARGS;
-#	print "PocoOSCAR: Calling $method with args " . join(',', @$args ) . "\n";
+
+	if ($method eq 'send_im' and HEAP->{throttle_time}) {
+		KERNEL->yield( "queue_im", @$args );
+		return;
+	}
+
 	eval {
 		HEAP->{oscar}->$method( @$args );
 	};
@@ -110,8 +149,6 @@ sub quit {
 
 sub set_callback {
 	my ($callback, $state) = ARGS;
-
-#	print "Setting callback $callback to $state\n";
 
 	my $method = "set_callback_${callback}";
 	HEAP->{oscar}->$method( SENDER->postback( $state ) ); 
@@ -134,7 +171,7 @@ sub connection_changed {
 		# Need the line below for faster machines; otherwise some bits seem to get lost
 		# along the way.  It's a hack, but it should only get called twice in all (once
 		# upon connection, once upon signon) so for now it should suffice.
-		sleep 1;
+		sleep 0.1;
 		$filenos{ fileno($socket) }++;
 		$poe_kernel->select( $socket, 'rd_ok', 'wr_ok', 'ex_ok' );
 	}
@@ -157,8 +194,17 @@ sub _start {
     # start an OSCAR session
     $oscar = POE::Component::OSCAR->new();
 
+    # start an OSCAR session with automatic throttling of new connections
+	# to prevent being banned by the server
+    $oscar = POE::Component::OSCAR->new( throttle => 4 );
+
     # set up the "im_in" callback to call your state, "im_in_state"
     $oscar->set_callback( im_in => 'im_in_state');
+
+	# it's good to detect errors if you don't want to get banned
+	$oscar->set_callback( error => 'error_state' );
+	$oscar->set_callback( admin_error => 'admin_erro_stater' );
+	$oscar->set_callback( rate_alert => 'rate_alert_state' );
 
     # sign on
     $oscar->signon( screenname => $MY_SCREENNAME, password => $MY_PASSWORD );
@@ -173,7 +219,7 @@ sub im_in_state {
 
 =head1 DEPENDENCIES
 
-This modules requires C<Net::OSCAR> and C<POE>.
+This modules requires C<Net::OSCAR>, C<POE>, and C<Time::HiRes>.
 
 =head1 ABSTRACT
 
@@ -191,10 +237,13 @@ Create a new connection with
 
 Though it has an object interface to make coding simpler, this actually spawns
 a POE session.  The arguments to the object are passed directly to the 
-Net::OSCAR module.
+Net::OSCAR module, with the exception of 'throttle'.  If passed in, the
+'throttle' argument will indicate the minimum amount of time the module will
+wait between sending messages.  This is useful, since bots that send lots of
+messages quickly will get banned.
 
-Furthermore, all other method calls on the object are passed directly to the 
-Net::OSCAR module.  For instance, to set the debug logging level, use
+All other method calls on the object are passed directly to the Net::OSCAR
+module.  For instance, to set the debug logging level, use
 
       $oscar->loglevel( 5 );
 
@@ -211,7 +260,7 @@ in your POE session.
 
 =head1 SEE ALSO
 
-The sample_im.pl program included with this package.
+The examples directory included with this package.
 
 The C<Net::OSCAR> documentation.
 
@@ -223,7 +272,7 @@ Dan McCormick, E<lt>dan@codeop.comE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright 2004 by Dan McCormick
+Copyright 2006 by Dan McCormick
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself. 

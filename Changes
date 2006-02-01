@@ -1,12 +1,6 @@
 Revision history for Perl extension POE::Component::OSCAR.
 
-0.02  Wed Sep 22 14:27:00 2004
-	- added "sleep 1" line to connection_changed as a hack to get it to work on
-	  faster machines; though it's an unfortunate workaround, it appears to only 
-	  get called once upon intial logon and once after signon success so all-in-
-	  all it's not too devastating
-
-0.01  Sat Aug 23 16:27:40 2003
-	- original version; created by h2xs 1.22 with options
-		-XA -b 5.6.0 -n POE::Component::OSCAR
+0.03  Tue Jan 03 19:17:21 2006
+	- Added throttle argument to prevent rate problems with server
+	- Added sleep 0.1 statements as a hack to interact better with Net::OSCAR
 

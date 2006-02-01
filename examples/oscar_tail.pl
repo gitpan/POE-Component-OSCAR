@@ -1,25 +1,33 @@
 #!/usr/bin/perl
 
-# This sample script is an OSCAR-to-telnet gateway.  Once the script
-# is started, you can telnet to a port (localhost:10101 by default)
-# and interact with the user specified by $SEND_TO_SCREENNAME.
+# This sample script will IM lines from a tailed file to $SEND_TO_SCREENNAME.
 
 use strict;
 use POE::Preprocessor;
-use POE qw(Component::Server::TCP Component::OSCAR);
+use POE qw(Wheel::FollowTail Component::OSCAR);
 
-my ($oscar, $client);
+my ($oscar);
 
 # create a screenname for your script at http://www.aim.com
 my $MY_SCREENNAME = 'A SCREENNAME';
 my $MY_PASSWORD = 'A PASSWORD';
 
-# if you telnet to localhost:10101, all messages will be sent to:
+# all messages will be sent to:
 my $SEND_TO_SCREENNAME = 'A SCREENNAME';
+
+my $FILE_TO_TAIL = 'A FILENAME';
+
+# only send errors matching these regular expressions (leave blank to send all
+# lines)
+my @ALLOW_REGEXES = ( qr/ERROR/ );
+
+# ignore lines matching these regular expressions (leave blank to send all
+# lines)
+my @IGNORE_REGEXES = ( qr/mail/ );
 
 POE::Session->create(
 	package_states => [
-		main => [qw(_start _stop im_in signon_done)]
+		main => [qw(_start _stop im_in signon_done tail_in tail_error tail_reset)]
 	]
 );
 $poe_kernel->run();
@@ -39,28 +47,49 @@ sub _start {
 	$oscar->loglevel( 5 );
 
 	$oscar->signon( screenname => $MY_SCREENNAME, password => $MY_PASSWORD );
-
-	# start a server on port 10101
-	POE::Component::Server::TCP->new(
-		Address => '127.0.0.1',
-		Port => 10101,
-		Alias => 'server',
-		ClientConnected => sub {
-			$client = $_[HEAP]->{client};
-		},
-		ClientInput => sub {
-			my $msg = $_[ARG0];
-
-			print "Sending to $SEND_TO_SCREENNAME: $msg\n";
-
-			$oscar->send_im( $SEND_TO_SCREENNAME => $msg );
-		}
-	);
-
 }
 
 sub signon_done {
 	print "Signon done!\n";
+
+	# start tailing the file
+	HEAP->{wheel} = POE::Wheel::FollowTail->new(
+		Filename => $FILE_TO_TAIL,
+		Driver	 => POE::Driver::SysRW->new(),
+		Filter	 => POE::Filter::Line->new(),
+		PollInterval => 1,
+		InputEvent => 'tail_in',
+		ErrorEvent => 'tail_error',
+		ResetEvent => 'tail_reset',
+	);
+}
+
+sub tail_in {
+	my $msg = $_[ARG0];
+
+	for my $regex (@IGNORE_REGEXES) {
+		if ($msg =~ /$regex/) {
+			return;
+		}
+	}
+
+	for my $regex (@ALLOW_REGEXES) {
+		if ($msg =~ /$regex/) {
+			print "Sending to $SEND_TO_SCREENNAME: $msg\n";
+			$oscar->send_im( $SEND_TO_SCREENNAME => $msg );
+			return;
+		}
+	}
+
+}
+
+sub tail_error {
+	my ($operation, $errnum, $errstr, $wheel_id) = @_[ARG0..ARG3];
+	warn "Wheel $wheel_id generated $operation error $errnum: $errstr\n";
+};
+
+sub tail_reset {
+	warn "File reset";
 }
 
 sub im_in {
@@ -70,12 +99,6 @@ sub im_in {
 	my ($object, $who, $what, $away) = @$args;
 
 	print "Received from $who: $what\n";
-
-	if ($client) {
-		$client->put( "$who: $what" );
-	} else {
-		warn "No client connected yet!";
-	}
 }
 
 sub error {

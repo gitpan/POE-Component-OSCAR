@@ -6,29 +6,31 @@ SYNOPSIS
 
     [ ... POE set up ... ]
 
-    sub _start { # start an OSCAR session $oscar =
-    POE::Component::OSCAR->new();
+    sub _start {
+			# start an OSCAR session $oscar =
+			POE::Component::OSCAR->new();
 
-        # start an OSCAR session with automatic throttling of new connections
-            # to prevent being banned by the server
-        $oscar = POE::Component::OSCAR->new( throttle => 4 );
+			# start an OSCAR session with automatic throttling of new connections
+			# to prevent being banned by the server
+			$oscar = POE::Component::OSCAR->new( throttle => 4 );
 
-        # set up the "im_in" callback to call your state, "im_in_state"
-        $oscar->set_callback( im_in => 'im_in_state');
+			# set up the "im_in" callback to call your state, "im_in_state"
+			$oscar->set_callback( im_in => 'im_in_state');
 
-            # it's good to detect errors if you don't want to get banned
-            $oscar->set_callback( error => 'error_state' );
-            $oscar->set_callback( admin_error => 'admin_erro_stater' );
-            $oscar->set_callback( rate_alert => 'rate_alert_state' );
+			# it's good to detect errors if you don't want to get banned
+			$oscar->set_callback( error => 'error_state' );
+			$oscar->set_callback( admin_error => 'admin_erro_stater' );
+			$oscar->set_callback( rate_alert => 'rate_alert_state' );
 
-        # sign on
-        $oscar->signon( screenname => $MY_SCREENNAME, password => $MY_PASSWORD );
+			# sign on
+			$oscar->signon( screenname => $MY_SCREENNAME, password => $MY_PASSWORD );
     }
 
-    sub im_in_state { my ($nothing, $args) = @_[ARG0..$#_]; my ($object,
-    $who, $what, $away) = @$args;
+    sub im_in_state { 
+			my ($nothing, $args) = @_[ARG0..$#_]; my ($object,
+				$who, $what, $away) = @$args;
 
-        print "Got '$what' from $who\n";
+      print "Got '$what' from $who\n";
     }
 
 DEPENDENCIES

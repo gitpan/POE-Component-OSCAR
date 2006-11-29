@@ -3,7 +3,6 @@
 # This sample script will IM lines from a tailed file to $SEND_TO_SCREENNAME.
 
 use strict;
-use POE::Preprocessor;
 use POE qw(Wheel::FollowTail Component::OSCAR);
 
 my ($oscar);

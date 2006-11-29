@@ -5,7 +5,6 @@
 # and interact with the user specified by $SEND_TO_SCREENNAME.
 
 use strict;
-use POE::Preprocessor;
 use POE qw(Component::Server::TCP Component::OSCAR);
 
 my ($oscar, $client);

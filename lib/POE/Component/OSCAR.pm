@@ -6,7 +6,7 @@ use vars qw($VERSION);
 use POE::Preprocessor;
 use POE 0.28;
 
-$VERSION = .03;
+$VERSION = .04;
 
 # make life prettier
 const KERNEL    $_[KERNEL]

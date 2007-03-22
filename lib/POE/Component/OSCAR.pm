@@ -3,10 +3,10 @@ package POE::Component::OSCAR;
 use 5.006;
 use strict;
 use vars qw($VERSION);
-use POE::Preprocessor;
+use Filter::Template;
 use POE 0.28;
 
-$VERSION = .04;
+$VERSION = .05;
 
 # make life prettier
 const KERNEL    $_[KERNEL]
